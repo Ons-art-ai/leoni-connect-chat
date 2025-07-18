@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { MapPin, ArrowRight } from 'lucide-react';
-import logoImage from '@/assets/leoni-logo.jpg';
+import logoImage from '/lovable-uploads/14cd5539-4024-49ac-a0f3-22b6f193d738.png';
 
 interface SiteSelectionProps {
   onSiteSelect: (site: string) => void;

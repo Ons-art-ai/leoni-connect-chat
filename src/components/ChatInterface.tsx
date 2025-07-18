@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,9 +15,13 @@ import {
   Paperclip,
   Smile,
   MoreVertical,
-  Users
+  Users,
+  File
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { VideoCall } from '@/components/VideoCall';
+import { CalendarMeeting } from '@/components/CalendarMeeting';
+import { FileShare } from '@/components/FileShare';
 
 interface ChatInterfaceProps {
   userEmail: string;
@@ -33,6 +37,8 @@ interface Message {
   isOwn: boolean;
   sender: string;
   type: 'text' | 'voice' | 'file';
+  fileName?: string;
+  fileSize?: string;
 }
 
 export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onLogout }: ChatInterfaceProps) => {
@@ -48,8 +54,17 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
   ]);
   const [newMessage, setNewMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showFileShare, setShowFileShare] = useState(false);
+  const [callType, setCallType] = useState<'video' | 'audio'>('video');
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll vers le bas quand de nouveaux messages arrivent
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleSendMessage = () => {
     if (newMessage.trim()) {
@@ -87,17 +102,13 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
   };
 
   const startVideoCall = () => {
-    toast({
-      title: "Appel vidéo",
-      description: "Fonction d'appel vidéo sera disponible prochainement"
-    });
+    setCallType('video');
+    setShowVideoCall(true);
   };
 
   const startAudioCall = () => {
-    toast({
-      title: "Appel audio",
-      description: "Fonction d'appel audio sera disponible prochainement"
-    });
+    setCallType('audio');
+    setShowVideoCall(true);
   };
 
   const shareScreen = () => {
@@ -116,10 +127,7 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
   };
 
   const openCalendar = () => {
-    toast({
-      title: "Calendrier",
-      description: "Fonction calendrier de réunions sera disponible prochainement"
-    });
+    setShowCalendar(true);
   };
 
   const showHistory = () => {
@@ -127,6 +135,30 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
       title: "Historique",
       description: "Affichage de l'historique des messages"
     });
+  };
+
+  const handleFileShare = (files: File[]) => {
+    files.forEach(file => {
+      const message: Message = {
+        id: Date.now().toString() + Math.random(),
+        text: `Fichier partagé: ${file.name}`,
+        timestamp: new Date(),
+        isOwn: true,
+        sender: userEmail.split('@')[0],
+        type: 'file',
+        fileName: file.name,
+        fileSize: formatFileSize(file.size)
+      };
+      setMessages(prev => [...prev, message]);
+    });
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
@@ -202,6 +234,25 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
         </div>
       </div>
 
+      {/* Modals */}
+      <VideoCall 
+        isOpen={showVideoCall}
+        onClose={() => setShowVideoCall(false)}
+        callType={callType}
+        contactName="Équipe Support"
+      />
+
+      <CalendarMeeting 
+        isOpen={showCalendar}
+        onClose={() => setShowCalendar(false)}
+      />
+
+      <FileShare 
+        isOpen={showFileShare}
+        onClose={() => setShowFileShare(false)}
+        onFileSend={handleFileShare}
+      />
+
       {/* Messages Area */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4 max-w-4xl mx-auto">
@@ -239,6 +290,7 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => setShowFileShare(true)}
               className="text-muted-foreground hover:text-foreground"
             >
               <Paperclip className="h-5 w-5" />

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Mail, Lock, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import logoImage from '@/assets/leoni-logo.jpg';
+import logoImage from '/lovable-uploads/14cd5539-4024-49ac-a0f3-22b6f193d738.png';
 
 interface LoginProps {
   selectedSite: string;
