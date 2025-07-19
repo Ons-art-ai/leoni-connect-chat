@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { VideoCall } from '@/components/VideoCall';
 import { CalendarMeeting } from '@/components/CalendarMeeting';
 import { FileShare } from '@/components/FileShare';
-import { sendMessage, subscribeToMessages, getConversationId, FirebaseMessage } from '@/services/chatService';
+import { sendMessage, subscribeToMessages, getConversationId, setUserOnline, subscribeToOnlineUsers, FirebaseMessage } from '@/services/chatService';
 import { Timestamp } from 'firebase/firestore';
 
 interface ChatInterfaceProps {
@@ -46,12 +46,14 @@ interface Message {
 export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onLogout }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [firebaseMessages, setFirebaseMessages] = useState<FirebaseMessage[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showFileShare, setShowFileShare] = useState(false);
   const [callType, setCallType] = useState<'video' | 'audio'>('video');
+  const [isConnected, setIsConnected] = useState(false);
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -60,12 +62,31 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Marquer l'utilisateur comme en ligne
+  useEffect(() => {
+    setUserOnline(userEmail, selectedSite, selectedDepartment);
+  }, [userEmail, selectedSite, selectedDepartment]);
+
+  // Écouter les utilisateurs en ligne
+  useEffect(() => {
+    const unsubscribe = subscribeToOnlineUsers(
+      selectedSite,
+      selectedDepartment,
+      (users) => {
+        setOnlineUsers(users);
+      }
+    );
+    return () => unsubscribe();
+  }, [selectedSite, selectedDepartment]);
+
   // Écouter les messages Firebase en temps réel
   useEffect(() => {
+    setIsConnected(false);
     const unsubscribe = subscribeToMessages(
       selectedSite,
       selectedDepartment,
       (fbMessages) => {
+        setIsConnected(true);
         setFirebaseMessages(fbMessages);
         // Convertir les messages Firebase en format local
         const convertedMessages: Message[] = fbMessages.map(msg => ({
@@ -73,17 +94,26 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
           text: msg.text,
           timestamp: msg.timestamp instanceof Timestamp ? msg.timestamp.toDate() : new Date(msg.timestamp),
           isOwn: msg.senderEmail === userEmail,
-          sender: msg.senderName,
+          sender: msg.senderEmail === userEmail ? 'Vous' : `${msg.senderName} (${msg.senderEmail.split('@')[0]})`,
           type: msg.type,
           fileName: msg.fileName,
           fileSize: msg.fileSize
         }));
         setMessages(convertedMessages);
+        
+        // Toast pour nouveaux messages d'autres utilisateurs
+        const latestMessage = fbMessages[fbMessages.length - 1];
+        if (latestMessage && latestMessage.senderEmail !== userEmail && fbMessages.length > 1) {
+          toast({
+            title: "Nouveau message",
+            description: `${latestMessage.senderName}: ${latestMessage.text.substring(0, 50)}...`
+          });
+        }
       }
     );
 
     return () => unsubscribe();
-  }, [selectedSite, selectedDepartment, userEmail]);
+  }, [selectedSite, selectedDepartment, userEmail, toast]);
 
   const handleSendMessage = async () => {
     if (newMessage.trim()) {
@@ -209,6 +239,9 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
               <p className="text-sm text-blue-100">
                 {selectedSite} - {selectedDepartment}
               </p>
+              <p className="text-xs text-blue-200">
+                {isConnected ? '🟢 Connecté' : '🔴 Déconnecté'} • {onlineUsers.length} utilisateur(s) en ligne
+              </p>
             </div>
           </div>
           
@@ -300,17 +333,28 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
               <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                 message.isOwn 
                   ? 'bg-primary text-primary-foreground' 
-                  : 'bg-muted text-muted-foreground'
+                  : 'bg-muted text-muted-foreground border-l-4 border-blue-500'
               }`}>
                 {!message.isOwn && (
-                  <p className="text-xs font-semibold mb-1">{message.sender}</p>
+                  <p className="text-xs font-semibold mb-1 text-blue-600">
+                    {message.sender} • Leoni
+                  </p>
+                )}
+                {message.type === 'file' && (
+                  <div className="flex items-center space-x-2 mb-2">
+                    <File className="h-4 w-4" />
+                    <span className="text-xs">{message.fileSize}</span>
+                  </div>
                 )}
                 <p className="text-sm">{message.text}</p>
-                <p className="text-xs opacity-70 mt-1">
-                  {message.timestamp.toLocaleTimeString('fr-FR', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
+                <p className="text-xs opacity-70 mt-1 flex items-center justify-between">
+                  <span>
+                    {message.timestamp.toLocaleTimeString('fr-FR', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </span>
+                  {message.isOwn && <span className="text-green-500">✓</span>}
                 </p>
               </div>
             </div>
