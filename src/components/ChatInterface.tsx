@@ -22,6 +22,8 @@ import { useToast } from '@/hooks/use-toast';
 import { VideoCall } from '@/components/VideoCall';
 import { CalendarMeeting } from '@/components/CalendarMeeting';
 import { FileShare } from '@/components/FileShare';
+import { sendMessage, subscribeToMessages, getConversationId, FirebaseMessage } from '@/services/chatService';
+import { Timestamp } from 'firebase/firestore';
 
 interface ChatInterfaceProps {
   userEmail: string;
@@ -42,16 +44,8 @@ interface Message {
 }
 
 export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onLogout }: ChatInterfaceProps) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Bienvenue dans Leoni Connect Chat! 👋',
-      timestamp: new Date(),
-      isOwn: false,
-      sender: 'Système',
-      type: 'text'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [firebaseMessages, setFirebaseMessages] = useState<FirebaseMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
@@ -66,31 +60,58 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = () => {
+  // Écouter les messages Firebase en temps réel
+  useEffect(() => {
+    const unsubscribe = subscribeToMessages(
+      selectedSite,
+      selectedDepartment,
+      (fbMessages) => {
+        setFirebaseMessages(fbMessages);
+        // Convertir les messages Firebase en format local
+        const convertedMessages: Message[] = fbMessages.map(msg => ({
+          id: msg.id || '',
+          text: msg.text,
+          timestamp: msg.timestamp instanceof Timestamp ? msg.timestamp.toDate() : new Date(msg.timestamp),
+          isOwn: msg.senderEmail === userEmail,
+          sender: msg.senderName,
+          type: msg.type,
+          fileName: msg.fileName,
+          fileSize: msg.fileSize
+        }));
+        setMessages(convertedMessages);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [selectedSite, selectedDepartment, userEmail]);
+
+  const handleSendMessage = async () => {
     if (newMessage.trim()) {
-      const message: Message = {
-        id: Date.now().toString(),
-        text: newMessage,
-        timestamp: new Date(),
-        isOwn: true,
-        sender: userEmail.split('@')[0],
-        type: 'text'
-      };
-      setMessages(prev => [...prev, message]);
-      setNewMessage('');
-      
-      // Simulation d'une réponse automatique
-      setTimeout(() => {
-        const response: Message = {
-          id: (Date.now() + 1).toString(),
-          text: 'Message reçu! Comment puis-je vous aider?',
-          timestamp: new Date(),
-          isOwn: false,
-          sender: 'Support IT',
-          type: 'text'
+      try {
+        const messageData = {
+          text: newMessage,
+          senderEmail: userEmail,
+          senderName: userEmail.split('@')[0],
+          type: 'text' as const,
+          site: selectedSite,
+          department: selectedDepartment,
+          conversationId: getConversationId(selectedSite, selectedDepartment)
         };
-        setMessages(prev => [...prev, response]);
-      }, 1000);
+
+        await sendMessage(messageData);
+        setNewMessage('');
+        
+        toast({
+          title: "Message envoyé",
+          description: "Votre message a été envoyé avec succès"
+        });
+      } catch (error) {
+        toast({
+          title: "Erreur",
+          description: "Impossible d'envoyer le message. Vérifiez votre connexion.",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -137,20 +158,35 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
     });
   };
 
-  const handleFileShare = (files: File[]) => {
-    files.forEach(file => {
-      const message: Message = {
-        id: Date.now().toString() + Math.random(),
-        text: `Fichier partagé: ${file.name}`,
-        timestamp: new Date(),
-        isOwn: true,
-        sender: userEmail.split('@')[0],
-        type: 'file',
-        fileName: file.name,
-        fileSize: formatFileSize(file.size)
-      };
-      setMessages(prev => [...prev, message]);
-    });
+  const handleFileShare = async (files: File[]) => {
+    for (const file of files) {
+      try {
+        const messageData = {
+          text: `Fichier partagé: ${file.name}`,
+          senderEmail: userEmail,
+          senderName: userEmail.split('@')[0],
+          type: 'file' as const,
+          fileName: file.name,
+          fileSize: formatFileSize(file.size),
+          site: selectedSite,
+          department: selectedDepartment,
+          conversationId: getConversationId(selectedSite, selectedDepartment)
+        };
+
+        await sendMessage(messageData);
+        
+        toast({
+          title: "Fichier partagé",
+          description: `${file.name} a été partagé avec succès`
+        });
+      } catch (error) {
+        toast({
+          title: "Erreur",
+          description: `Impossible de partager ${file.name}`,
+          variant: "destructive"
+        });
+      }
+    }
   };
 
   const formatFileSize = (bytes: number) => {
