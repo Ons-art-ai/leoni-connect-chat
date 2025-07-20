@@ -3,14 +3,14 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
-// Configuration Firebase - À remplacer avec vos propres clés
+// Configuration Firebase - Remplacez avec vos vraies clés Firebase
 const firebaseConfig = {
-  apiKey: "VOTRE_API_KEY",
-  authDomain: "VOTRE_PROJECT_ID.firebaseapp.com",
-  projectId: "VOTRE_PROJECT_ID",
-  storageBucket: "VOTRE_PROJECT_ID.appspot.com",
-  messagingSenderId: "VOTRE_MESSAGING_SENDER_ID",
-  appId: "VOTRE_APP_ID"
+  apiKey: "AIzaSyDEMOKEY-REPLACE_WITH_YOUR_REAL_API_KEY",
+  authDomain: "your-project-id.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project-id.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef123456"
 };
 
 // Initialiser Firebase
