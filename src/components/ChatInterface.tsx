@@ -81,13 +81,16 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
 
   // Écouter les messages Firebase en temps réel
   useEffect(() => {
+    console.log('🔄 Démarrage de l\'écoute des messages pour:', selectedSite, selectedDepartment);
     setIsConnected(false);
     const unsubscribe = subscribeToMessages(
       selectedSite,
       selectedDepartment,
       (fbMessages) => {
+        console.log('📨 Messages reçus de Firebase:', fbMessages.length, fbMessages);
         setIsConnected(true);
         setFirebaseMessages(fbMessages);
+        
         // Convertir les messages Firebase en format local
         const convertedMessages: Message[] = fbMessages.map(msg => ({
           id: msg.id || '',
@@ -99,6 +102,8 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
           fileName: msg.fileName,
           fileSize: msg.fileSize
         }));
+        
+        console.log('✅ Messages convertis pour affichage:', convertedMessages.length, convertedMessages);
         setMessages(convertedMessages);
         
         // Toast pour nouveaux messages d'autres utilisateurs
