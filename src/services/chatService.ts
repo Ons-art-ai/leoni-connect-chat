@@ -50,30 +50,44 @@ export const subscribeToMessages = (
   callback: (messages: FirebaseMessage[]) => void
 ) => {
   const conversationId = getConversationId(site, department);
-  console.log('🔧 Démarrage écoute temps réel pour:', conversationId);
+  console.log('🔧 TEMPS RÉEL: Démarrage écoute pour conversation:', conversationId);
   
-  // Requête simple pour éviter les problèmes d'index
+  // Requête optimisée pour temps réel
   const q = query(
     collection(db, 'messages'),
-    where('conversationId', '==', conversationId)
+    where('conversationId', '==', conversationId),
+    orderBy('timestamp', 'asc')
   );
 
   const unsubscribe = onSnapshot(
     q, 
     (querySnapshot) => {
-      console.log('📡 Snapshot reçu - Nombre de docs:', querySnapshot.size);
+      console.log('📡 TEMPS RÉEL: Changement détecté!', querySnapshot.size, 'messages');
       
       if (querySnapshot.empty) {
-        console.log('📭 Aucun message trouvé pour cette conversation');
+        console.log('📭 TEMPS RÉEL: Conversation vide');
         callback([]);
         return;
       }
 
       const messages: FirebaseMessage[] = [];
+      
+      // Traiter chaque changement en temps réel
+      querySnapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          console.log('➕ TEMPS RÉEL: Nouveau message ajouté:', change.doc.id);
+        }
+        if (change.type === 'modified') {
+          console.log('✏️ TEMPS RÉEL: Message modifié:', change.doc.id);
+        }
+        if (change.type === 'removed') {
+          console.log('🗑️ TEMPS RÉEL: Message supprimé:', change.doc.id);
+        }
+      });
+
+      // Récupérer tous les messages
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        console.log('📄 Message reçu:', doc.id, data);
-        
         messages.push({
           id: doc.id,
           ...data,
@@ -81,20 +95,42 @@ export const subscribeToMessages = (
         } as FirebaseMessage);
       });
       
-      // Trier par timestamp
-      messages.sort((a, b) => {
-        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
-        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
-        return timeA - timeB;
-      });
-      
-      console.log('📬 Messages triés envoyés au callback:', messages.length);
+      console.log('📬 TEMPS RÉEL: Envoi de', messages.length, 'messages au chat');
       callback(messages);
     }, 
     (error) => {
-      console.error('❌ Erreur écoute Firestore:', error);
-      console.error('❌ Code erreur:', error.code);
-      console.error('❌ Message:', error.message);
+      console.error('❌ TEMPS RÉEL: Erreur écoute Firestore:', error);
+      
+      // Fallback sans orderBy si problème d'index
+      if (error.code === 'failed-precondition') {
+        console.log('🔄 TEMPS RÉEL: Fallback sans orderBy...');
+        const fallbackQuery = query(
+          collection(db, 'messages'),
+          where('conversationId', '==', conversationId)
+        );
+        
+        return onSnapshot(fallbackQuery, (querySnapshot) => {
+          const messages: FirebaseMessage[] = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            messages.push({
+              id: doc.id,
+              ...data,
+              timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp || Date.now())
+            } as FirebaseMessage);
+          });
+          
+          // Tri manuel par timestamp
+          messages.sort((a, b) => {
+            const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+            const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+            return timeA - timeB;
+          });
+          
+          console.log('📬 TEMPS RÉEL (FALLBACK): Envoi de', messages.length, 'messages');
+          callback(messages);
+        });
+      }
     }
   );
 

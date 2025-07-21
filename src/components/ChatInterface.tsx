@@ -88,19 +88,20 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
     return () => unsubscribe();
   }, [selectedSite, selectedDepartment]);
 
-  // Écouter les messages Firebase en temps réel
+  // 🚀 SYSTÈME TEMPS RÉEL - Écouter les messages Firebase
   useEffect(() => {
-    console.log('🔄 Démarrage de l\'écoute des messages pour:', selectedSite, selectedDepartment);
+    console.log('🔄 TEMPS RÉEL: Démarrage écoute pour:', selectedSite, selectedDepartment);
     setIsConnected(false);
+    
     const unsubscribe = subscribeToMessages(
       selectedSite,
       selectedDepartment,
       (fbMessages) => {
-        console.log('📨 Messages reçus de Firebase:', fbMessages.length, fbMessages);
+        console.log('📨 TEMPS RÉEL: Messages reçus:', fbMessages.length);
         setIsConnected(true);
         setFirebaseMessages(fbMessages);
         
-        // Convertir les messages Firebase en format local
+        // Convertir pour l'affichage
         const convertedMessages: Message[] = fbMessages.map(msg => ({
           id: msg.id || '',
           text: msg.text,
@@ -112,26 +113,35 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
           fileSize: msg.fileSize
         }));
         
-        console.log('✅ Messages convertis pour affichage:', convertedMessages.length, convertedMessages);
+        console.log('✅ TEMPS RÉEL: Messages convertis pour affichage:', convertedMessages.length);
         setMessages(convertedMessages);
         
-        // Toast pour nouveaux messages d'autres utilisateurs
+        // 🔔 Notification pour nouveaux messages d'autres utilisateurs
         const latestMessage = fbMessages[fbMessages.length - 1];
-        if (latestMessage && latestMessage.senderEmail !== userEmail && fbMessages.length > 1) {
+        if (latestMessage && 
+            latestMessage.senderEmail !== userEmail && 
+            fbMessages.length > 0 && 
+            messages.length > 0 && 
+            fbMessages.length > messages.length) {
+          console.log('🔔 TEMPS RÉEL: Nouveau message d\'un autre utilisateur!');
           toast({
-            title: "Nouveau message",
-            description: `${latestMessage.senderName}: ${latestMessage.text.substring(0, 50)}...`
+            title: "💬 Nouveau message",
+            description: `${latestMessage.senderName}: ${latestMessage.text.substring(0, 50)}${latestMessage.text.length > 50 ? '...' : ''}`
           });
         }
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      console.log('🛑 TEMPS RÉEL: Arrêt de l\'écoute');
+      unsubscribe();
+    };
   }, [selectedSite, selectedDepartment, userEmail, toast]);
 
   const handleSendMessage = async () => {
     if (newMessage.trim()) {
       try {
+        console.log('📤 ENVOI: Préparation du message...');
         const messageData = {
           text: newMessage,
           senderEmail: userEmail,
@@ -142,17 +152,21 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
           conversationId: getConversationId(selectedSite, selectedDepartment)
         };
 
-        await sendMessage(messageData);
+        console.log('📤 ENVOI: Données du message:', messageData);
+        const messageId = await sendMessage(messageData);
+        console.log('✅ ENVOI: Message envoyé avec ID:', messageId);
+        
         setNewMessage('');
         
         toast({
-          title: "Message envoyé",
-          description: "Votre message a été envoyé avec succès"
+          title: "✅ Message envoyé",
+          description: "Votre message a été diffusé en temps réel"
         });
       } catch (error) {
+        console.error('❌ ENVOI: Erreur:', error);
         toast({
-          title: "Erreur",
-          description: "Impossible d'envoyer le message. Vérifiez votre connexion.",
+          title: "❌ Erreur d'envoi",
+          description: "Impossible d'envoyer le message. Vérifiez votre connexion Firebase.",
           variant: "destructive"
         });
       }
