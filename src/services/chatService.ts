@@ -6,7 +6,9 @@ import {
   onSnapshot, 
   serverTimestamp,
   where,
-  Timestamp 
+  Timestamp,
+  enableNetwork,
+  disableNetwork 
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 
@@ -23,100 +25,91 @@ export interface FirebaseMessage {
   site: string;
   department: string;
   conversationId: string;
-  isOnline?: boolean;
-  userRole?: string;
 }
 
 // Fonction pour envoyer un message
 export const sendMessage = async (messageData: Omit<FirebaseMessage, 'id' | 'timestamp'>) => {
   try {
+    console.log('📤 Envoi message:', messageData);
     const docRef = await addDoc(collection(db, 'messages'), {
       ...messageData,
       timestamp: serverTimestamp()
     });
+    console.log('✅ Message envoyé avec ID:', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('Erreur lors de l\'envoi du message:', error);
+    console.error('❌ Erreur lors de l\'envoi du message:', error);
     throw error;
   }
 };
 
-// Fonction pour écouter les messages en temps réel
+// Fonction optimisée pour écouter les messages en temps réel
 export const subscribeToMessages = (
   site: string, 
   department: string,
   callback: (messages: FirebaseMessage[]) => void
 ) => {
-  const conversationId = `${site}_${department}`;
-  console.log('🔧 Configuration écoute Firebase pour conversationId:', conversationId);
+  const conversationId = getConversationId(site, department);
+  console.log('🔧 Démarrage écoute temps réel pour:', conversationId);
   
+  // Requête simple pour éviter les problèmes d'index
   const q = query(
     collection(db, 'messages'),
-    where('conversationId', '==', conversationId),
-    orderBy('timestamp', 'asc')
+    where('conversationId', '==', conversationId)
   );
 
-  return onSnapshot(q, 
+  const unsubscribe = onSnapshot(
+    q, 
     (querySnapshot) => {
-      console.log('📡 Snapshot reçu:', querySnapshot.size, 'documents');
+      console.log('📡 Snapshot reçu - Nombre de docs:', querySnapshot.size);
+      
+      if (querySnapshot.empty) {
+        console.log('📭 Aucun message trouvé pour cette conversation');
+        callback([]);
+        return;
+      }
+
       const messages: FirebaseMessage[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        console.log('📄 Document:', doc.id, data);
+        console.log('📄 Message reçu:', doc.id, data);
+        
         messages.push({
           id: doc.id,
           ...data,
-          // Convertir le timestamp Firestore en Date si nécessaire
-          timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp
+          timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp || Date.now())
         } as FirebaseMessage);
       });
-      console.log('📬 Messages finaux envoyés au callback:', messages.length);
+      
+      // Trier par timestamp
+      messages.sort((a, b) => {
+        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+        return timeA - timeB;
+      });
+      
+      console.log('📬 Messages triés envoyés au callback:', messages.length);
       callback(messages);
     }, 
     (error) => {
-      console.error('❌ Erreur lors de l\'écoute des messages:', error);
+      console.error('❌ Erreur écoute Firestore:', error);
       console.error('❌ Code erreur:', error.code);
-      console.error('❌ Message erreur:', error.message);
-      
-      // Fallback: essayer sans orderBy si problème d'index
-      if (error.code === 'failed-precondition' || error.code === 'permission-denied') {
-        console.log('🔄 Tentative sans orderBy...');
-        const fallbackQuery = query(
-          collection(db, 'messages'),
-          where('conversationId', '==', conversationId)
-        );
-        
-        return onSnapshot(fallbackQuery, (querySnapshot) => {
-          const messages: FirebaseMessage[] = [];
-          querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            messages.push({
-              id: doc.id,
-              ...data,
-              timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp
-            } as FirebaseMessage);
-          });
-          // Trier manuellement
-          messages.sort((a, b) => {
-            const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
-            const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
-            return timeA - timeB;
-          });
-          callback(messages);
-        });
-      }
+      console.error('❌ Message:', error.message);
     }
   );
+
+  return unsubscribe;
 };
 
 // Fonction pour obtenir l'ID de conversation
 export const getConversationId = (site: string, department: string): string => {
-  return `${site}_${department}`;
+  return `${site}_${department}`.toLowerCase().replace(/\s+/g, '_');
 };
 
-// Fonction pour marquer un utilisateur comme en ligne
+// Fonction simplifiée pour marquer un utilisateur comme en ligne
 export const setUserOnline = async (userEmail: string, site: string, department: string) => {
   try {
+    console.log('👤 Mise à jour statut utilisateur:', userEmail);
     await addDoc(collection(db, 'user_status'), {
       userEmail,
       site,
@@ -126,7 +119,7 @@ export const setUserOnline = async (userEmail: string, site: string, department:
       conversationId: getConversationId(site, department)
     });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du statut:', error);
+    console.error('❌ Erreur mise à jour statut:', error);
   }
 };
 
@@ -148,8 +141,24 @@ export const subscribeToOnlineUsers = (
     const users: string[] = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      users.push(data.userEmail);
+      if (users.indexOf(data.userEmail) === -1) {
+        users.push(data.userEmail);
+      }
     });
-    callback(users);
+    callback([...new Set(users)]); // Éliminer les doublons
+  }, (error) => {
+    console.error('❌ Erreur écoute utilisateurs en ligne:', error);
   });
+};
+
+// Fonction pour vérifier la connexion Firebase
+export const checkFirebaseConnection = async () => {
+  try {
+    await enableNetwork(db);
+    console.log('🟢 Firebase connecté');
+    return true;
+  } catch (error) {
+    console.error('🔴 Firebase déconnecté:', error);
+    return false;
+  }
 };

@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { VideoCall } from '@/components/VideoCall';
 import { CalendarMeeting } from '@/components/CalendarMeeting';
 import { FileShare } from '@/components/FileShare';
-import { sendMessage, subscribeToMessages, getConversationId, setUserOnline, subscribeToOnlineUsers, FirebaseMessage } from '@/services/chatService';
+import { sendMessage, subscribeToMessages, getConversationId, setUserOnline, subscribeToOnlineUsers, checkFirebaseConnection, FirebaseMessage } from '@/services/chatService';
 import { Timestamp } from 'firebase/firestore';
 
 interface ChatInterfaceProps {
@@ -62,9 +62,18 @@ export const ChatInterface = ({ userEmail, selectedSite, selectedDepartment, onL
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Marquer l'utilisateur comme en ligne
+  // Vérifier la connexion Firebase et marquer l'utilisateur comme en ligne
   useEffect(() => {
-    setUserOnline(userEmail, selectedSite, selectedDepartment);
+    const initFirebase = async () => {
+      const isConnected = await checkFirebaseConnection();
+      if (isConnected) {
+        console.log('🟢 Firebase initialisé avec succès');
+        setUserOnline(userEmail, selectedSite, selectedDepartment);
+      } else {
+        console.log('🔴 Problème de connexion Firebase');
+      }
+    };
+    initFirebase();
   }, [userEmail, selectedSite, selectedDepartment]);
 
   // Écouter les utilisateurs en ligne

@@ -1,99 +1,139 @@
-# Instructions de Configuration Firebase pour Leoni Connect Chat
+# Configuration Firebase pour Leoni Connect Chat
 
-## Étapes de Configuration Firebase
+## Étapes pour configurer votre nouveau projet Firebase
 
-### 1. Créer un Projet Firebase
+### 1. Créer un nouveau projet Firebase
 1. Allez sur [Firebase Console](https://console.firebase.google.com/)
 2. Cliquez sur "Ajouter un projet"
-3. Nommez votre projet (ex: "leoni-connect-chat")
-4. Suivez les étapes de configuration
+3. Donnez un nom à votre projet (ex: "leoni-connect-chat")
+4. Suivez les étapes de création
 
-### 2. Activer les Services Nécessaires
-
-#### Firestore Database
-1. Dans la console Firebase, allez dans "Firestore Database"
+### 2. Activer Firestore Database
+1. Dans votre projet Firebase, allez dans "Firestore Database"
 2. Cliquez sur "Créer une base de données"
-3. Choisissez "Commencer en mode test" pour le développement
-4. Sélectionnez une région proche (Europe West)
+3. Choisissez "Démarrer en mode test" pour commencer
+4. Sélectionnez une région proche (ex: europe-west1)
 
-#### Authentication (Optionnel)
-1. Allez dans "Authentication"
-2. Activez "Email/Password" dans l'onglet "Sign-in method"
-
-#### Storage (Pour les fichiers)
-1. Allez dans "Storage"
-2. Cliquez sur "Commencer"
-3. Choisissez les règles par défaut
-
-### 3. Obtenir la Configuration
-1. Allez dans "Paramètres du projet" (icône engrenage)
-2. Descendez jusqu'à "Vos applications"
-3. Cliquez sur l'icône web "</>"
-4. Enregistrez votre application (ex: "leoni-chat-web")
-5. Copiez la configuration qui apparaît
-
-### 4. Configurer l'Application
-1. Ouvrez le fichier `src/config/firebase.ts`
-2. Remplacez la configuration par défaut par vos vraies valeurs :
-
-```typescript
-const firebaseConfig = {
-  apiKey: "VOTRE_VRAIE_API_KEY",
-  authDomain: "votre-projet.firebaseapp.com",
-  projectId: "votre-projet-id",
-  storageBucket: "votre-projet.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abc123def456"
-};
-```
-
-### 5. Règles de Sécurité Firestore
-Allez dans Firestore > Règles et utilisez ces règles pour commencer :
+### 3. Configurer les règles Firestore
+Dans l'onglet "Règles" de Firestore, remplacez le contenu par:
 
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Permettre lecture/écriture pour les messages
     match /messages/{messageId} {
-      allow read, write: if true; // À modifier pour plus de sécurité
+      allow read, write: if true;
+    }
+    
+    // Permettre lecture/écriture pour les statuts utilisateurs
+    match /user_status/{statusId} {
+      allow read, write: if true;
     }
   }
 }
 ```
 
-### 6. Structure des Collections
-La collection `messages` aura cette structure :
+### 4. Obtenir la configuration
+1. Dans "Paramètres du projet" (icône engrenage)
+2. Descendez jusqu'à "Vos applications"
+3. Cliquez sur l'icône web `</>`
+4. Donnez un nom à votre app (ex: "leoni-chat-web")
+5. Copiez l'objet `firebaseConfig`
+
+### 5. Mettre à jour la configuration dans le code
+Remplacez le contenu de `src/config/firebase.ts`:
+
+```typescript
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
+
+// REMPLACEZ PAR VOTRE VRAIE CONFIGURATION
+const firebaseConfig = {
+  apiKey: "VOTRE_API_KEY",
+  authDomain: "VOTRE_PROJECT_ID.firebaseapp.com",
+  projectId: "VOTRE_PROJECT_ID",
+  storageBucket: "VOTRE_PROJECT_ID.appspot.com",
+  messagingSenderId: "VOTRE_MESSAGING_SENDER_ID",
+  appId: "VOTRE_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
+export const auth = getAuth(app);
+export const storage = getStorage(app);
+export default app;
 ```
-messages/
-  - text: string
-  - timestamp: timestamp
-  - senderEmail: string
-  - senderName: string
-  - type: "text" | "voice" | "file"
-  - fileName?: string
-  - fileSize?: string
-  - site: string
-  - department: string
-  - conversationId: string
+
+### 6. Test de fonctionnement
+Après la configuration:
+1. Ouvrez la console du navigateur (F12)
+2. Connectez-vous avec un utilisateur
+3. Envoyez un message
+4. Vérifiez les logs: vous devriez voir "🟢 Firebase connecté"
+5. Le message doit apparaître dans Firestore Console
+
+### 7. Résolution des problèmes courants
+
+#### Erreur "Missing or insufficient permissions"
+- Vérifiez que les règles Firestore sont correctement configurées
+- Assurez-vous que le mode "test" est activé
+
+#### Erreur "Failed to get document"
+- Vérifiez que l'ID du projet est correct
+- Vérifiez que Firestore est activé
+
+#### Messages ne s'affichent pas en temps réel
+- Ouvrez les outils de développement (F12)
+- Regardez les logs dans la console
+- Les messages devraient apparaître avec "📡 Snapshot reçu"
+
+### Structure des données dans Firestore
+
+#### Collection: `messages`
+```javascript
+{
+  text: "Contenu du message",
+  senderEmail: "user@example.com",
+  senderName: "Nom Utilisateur", 
+  type: "text", // ou "file", "voice"
+  site: "Site sélectionné",
+  department: "Département sélectionné",
+  conversationId: "site_departement",
+  timestamp: [Timestamp Firebase],
+  fileName?: "nom-fichier.pdf", // optionnel
+  fileSize?: "1.2 MB" // optionnel
+}
 ```
 
-### 7. Test de Fonctionnement
-1. Lancez votre application
-2. Envoyez un message
-3. Vérifiez dans Firebase Console > Firestore que le message apparaît
-4. Ouvrez l'application dans plusieurs onglets pour tester la synchronisation temps réel
+#### Collection: `user_status`
+```javascript
+{
+  userEmail: "user@example.com",
+  site: "Site sélectionné", 
+  department: "Département sélectionné",
+  isOnline: true,
+  lastSeen: [Timestamp Firebase],
+  conversationId: "site_departement"
+}
+```
 
-## Fonctionnalités Implémentées
-- ✅ Envoi de messages en temps réel
-- ✅ Réception de messages en temps réel
-- ✅ Messages par site et département
-- ✅ Partage de fichiers
-- ✅ Identification des expéditeurs
-- ✅ Horodatage des messages
+### Commandes de débogage
+Dans la console du navigateur, vous pouvez tester:
 
-## Prochaines Étapes (Optionnelles)
-1. Ajouter l'authentification Firebase
-2. Améliorer les règles de sécurité
-3. Ajouter le stockage de fichiers
-4. Implémenter les messages vocaux
-5. Ajouter la notification push
+```javascript
+// Vérifier la connexion
+console.log('Firebase App:', firebase.apps);
+
+// Voir les messages en temps réel
+// (Les logs apparaissent automatiquement avec les emojis 🔄📨✅)
+```
+
+## Support
+Si vous rencontrez des problèmes, vérifiez:
+1. Que Firebase est bien configuré
+2. Que les règles Firestore permettent l'accès
+3. Que la configuration est correcte dans le code
+4. Les logs de la console pour des erreurs spécifiques
