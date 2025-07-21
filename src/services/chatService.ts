@@ -48,6 +48,7 @@ export const subscribeToMessages = (
   callback: (messages: FirebaseMessage[]) => void
 ) => {
   const conversationId = `${site}_${department}`;
+  console.log('🔧 Configuration écoute Firebase pour conversationId:', conversationId);
   
   const q = query(
     collection(db, 'messages'),
@@ -55,21 +56,57 @@ export const subscribeToMessages = (
     orderBy('timestamp', 'asc')
   );
 
-  return onSnapshot(q, (querySnapshot) => {
-    const messages: FirebaseMessage[] = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      messages.push({
-        id: doc.id,
-        ...data,
-        // Convertir le timestamp Firestore en Date si nécessaire
-        timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp
-      } as FirebaseMessage);
-    });
-    callback(messages);
-  }, (error) => {
-    console.error('Erreur lors de l\'écoute des messages:', error);
-  });
+  return onSnapshot(q, 
+    (querySnapshot) => {
+      console.log('📡 Snapshot reçu:', querySnapshot.size, 'documents');
+      const messages: FirebaseMessage[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log('📄 Document:', doc.id, data);
+        messages.push({
+          id: doc.id,
+          ...data,
+          // Convertir le timestamp Firestore en Date si nécessaire
+          timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp
+        } as FirebaseMessage);
+      });
+      console.log('📬 Messages finaux envoyés au callback:', messages.length);
+      callback(messages);
+    }, 
+    (error) => {
+      console.error('❌ Erreur lors de l\'écoute des messages:', error);
+      console.error('❌ Code erreur:', error.code);
+      console.error('❌ Message erreur:', error.message);
+      
+      // Fallback: essayer sans orderBy si problème d'index
+      if (error.code === 'failed-precondition' || error.code === 'permission-denied') {
+        console.log('🔄 Tentative sans orderBy...');
+        const fallbackQuery = query(
+          collection(db, 'messages'),
+          where('conversationId', '==', conversationId)
+        );
+        
+        return onSnapshot(fallbackQuery, (querySnapshot) => {
+          const messages: FirebaseMessage[] = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            messages.push({
+              id: doc.id,
+              ...data,
+              timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp
+            } as FirebaseMessage);
+          });
+          // Trier manuellement
+          messages.sort((a, b) => {
+            const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+            const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+            return timeA - timeB;
+          });
+          callback(messages);
+        });
+      }
+    }
+  );
 };
 
 // Fonction pour obtenir l'ID de conversation
